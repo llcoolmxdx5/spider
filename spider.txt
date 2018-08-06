@@ -1,0 +1,245 @@
+1.scrapy
+  1.架构
+    1.engine 引擎
+      处理整个系统的数据流处理,触发事物,是整个框架的核心
+    2.item 项目
+      定义爬去对象的数据结构,爬取的数据会被赋值成该item对象
+    3.scheduler 调度器
+    4.Downloader 下载器
+    5.spiders
+    6.Item Pipeline
+    7.Downloader Middlewares
+    8.Spider Middlewares
+  2.项目结构
+    1.scrapy.cfg
+      项目配置文件 项目配置文件路径 部署相关信息
+    2.items.py
+      定义item数据结构
+    3.Pipelines.py
+      Item Pipeline实现
+    4.settings.py
+      项目全局配置
+    5.middlewares.py
+      Spider Middlewares 和 Downloader Middlewares实现
+    6.spiders
+      内含多个spider实现 每个spider一个py文件
+  3.入门
+    1.创建项目
+      scrapy startproject 项目名
+    2.创建Spider
+      cd 项目
+      scrapy genspider 项目名 域名
+    3.创建Item
+      继承 scrapy.Item类
+      定义类型为scrapy.Field()的字段
+    4.解析response
+      在spiders文件中的def parse(self, response)
+      1.css选择器
+        r = response.css('选择器')
+        选择器::text 获取文本
+        选择器::attr(属性) 获取属性
+        r.extract_first()
+          获取列表的第一个元素
+        r.extract()
+          获取整个列表
+      2.xpath
+    5.使用Item
+      在spiders文件中的def parse
+      yield item 返回一个字典
+    6.后续Request
+      在spiders文件中的def parse
+      获取下一页的相对路径
+      next = response.css(' a::attr(href)').extract_first()
+      url = response.urljoin(next)
+      yield scrapy.Request(url=url, callback=self.parse)
+    7.使用Item Pipeline
+    8.运行
+      进入目录
+      scrapy crawl 项目
+    9.保存
+      scrapy crawl 项目 -o 项目名.后缀
+      支持json jl jsonlines csv xml pickle marshal
+      ftp ftp://user:pass@ftp.example.com/path/项目名.后缀
+  4.selector 用法
+    1.直接使用
+      from scrapy import Selector
+      selector = Selector(text=html)
+      title = selector.xpath().extract_first()
+    2.xpath选择器
+      response.selector.xpath()
+      response.xpath()
+    3.css选择器
+      response.selector.css()
+      response.css('a[href=""] img::attr(src)')
+    4.正则匹配
+      不能直接调用re
+      response.xpath('.').re()
+        会输出匹配到的所有分组
+      response.xpath('.').re_first()
+        输出匹配到的第一个分组
+    注:
+      选择器可以混用 例如:response.css().xpath().re()
+  5.Spider用法
+    1.作用
+      1.定义爬取网站的动作
+      2.分析爬取下来的网页
+    2.scrapy.Spider.Spider类
+      1.name 爬虫名称
+      2.allowed_domains 允许爬取的域名 可选配置
+      3.custom_settings 字典 专属于本Spider的配置 
+      4.crawler 获取项目的配置信息
+      5.settings 直接获取项目的全局配置变量
+      6.start_requests()
+        生成初始请求 返回一个可迭代对象
+        默认以 start_urls来构造Request Get请求方式
+        初始为post请求方式时,需重写
+      7.parse()
+        返回一个包含Request或Item的可迭代对象
+        处理Response,处理返回结果
+      8.closed()
+        Spider关闭时,调用
+  6.Downloader Middleware 用法
+    1.作用
+      在Request执行下载前对其修改
+      生成的Response被Spider解析前对其修改
+      修改User-Agent 处理重定向 设置代理 失败重试
+      设置Cookies
+    2.核心方法
+      1.process_request(request, spider)
+        返回:
+          1.None 继续调度其他process_request方法,最后到 Downloader执行
+          2.Response对象 更低优先级的process_request和process_exception方法不会被调用,每个process_response依次调用,最后将Response对象发给Spider处理
+          3.Request对象 更低优先级的process_request方法停止执行,放入调度队列,被调度后,更低优先级的process_request方法继续执行
+        如果抛出IgnoreRequest异常 所有process_exception依次执行
+      2.process_response(requset, response, spider)
+        返回:
+          1.Request对象 
+          2.Response对象
+        抛出IgnoreRequest异常 
+      3.process_exception(request, exception, spider)
+        必须返回 None Request对象 Response对象
+  7.Spider Middleware 用法
+    1.作用
+      1.在Response发送给Spider之前对Response进行处理
+      2.在Request发送给Schedule之前对Request进行处理
+      3.在Item发送给Item Pipeline之前对Item进行处理
+    2.核心方法
+      1.process_spider_input(response, spider)
+        返回None或抛出异常
+        当Response被 Spider Middleware处理时被调用
+      2.process_spider_output(response,result,spider)
+        result:Spider返回的结果
+        返回一个包含Request或Item的可迭代对象
+      3.process_spider_exception(response,exception,spider)
+        返回None或 一个包含Request或Item的可迭代对象
+      4.process_start_requests(start_requests,spider)
+        start_requests: Start Request
+        返回另一个包含Request对象的可迭代对象
+  8.Item Pipeline用法
+    1.作用
+      1.清理HTML数据
+      2.验证爬取数据,检查爬取字段
+      3.查重并丢弃重复内容
+      4.将爬取结果保存到字符串
+    2.核心方法
+      1.process_item(item,spider)该方法必须实现
+        对Item进行处理
+        进行数据处理或将数据写进数据库等操作
+        返回Item类型或抛出DropItem异常
+      2.open_spider(spider)
+        Spider开启时自动调用
+        做初始化操作,如数据库连接等
+      3.close_spider(spider)
+        Spider关闭时自动调用
+      4.from_crawler(cls,crawler)
+        返回一个Class实例
+        通过crawler对象,拿到Scrapy所有核心组件,然后创建一个Pipeline实例
+  9.settings.py 配置
+    1.MySQL
+      MYSQL_HOST = 'localhost'
+      MYSQL_DATABASE = ''
+      MYSQL_USER = 'root'
+      MYSQL_PASSWORD = '123456'
+      MYSQL_PORT = 3306
+    2.MongoDB
+      MONGO_URI = 'localhost'
+      MONGO_DB = ''
+    3.Redis
+    4.ITEM_PIPELINES
+    5.Spider Middleware
+    6.DOWNLOADER_MIDDLEWARES
+      自己设置的优先级应在默认的之前 
+      DOWNLOADER_MIDDLEWARES_BASE=
+      {
+      'scrapy.downloadermiddlewares.robotstxt.RobotsTxtMiddleware': 100, 
+      'scrapy.downloadermiddlewares.httpauth.HttpAuthMiddleware': 300, 
+      'scrapy.downloadermiddlewares.downloadtimeout.DownloadTimeoutMiddleware': 350, 
+      'scrapy.downloadermiddlewares.defaultheaders.DefaultHeadersMiddleware': 400, 
+      'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': 500, 
+      'scrapy.downloadermiddlewares.retry.RetryMiddleware': 550, 
+      'scrapy.downloadermiddlewares.ajaxcrawl.AjaxCrawlMiddleware': 560, 
+      'scrapy.downloadermiddlewares.redirect.MetaRefreshMiddleware': 580, 
+      'scrapy.downloadermiddlewares.httpcompression.HttpCompressionMiddleware': 590, 
+      'scrapy.downloadermiddlewares.redirect.RedirectMiddleware': 600, 
+      'scrapy.downloadermiddlewares.cookies.CookiesMiddleware': 700, 
+      'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware': 750, 
+      'scrapy.downloadermiddlewares.stats.DownloaderStats': 850, 
+      'scrapy.downloadermiddlewares.httpcache.HttpCacheMiddleware': 900, }
+    7.DOWNLOAD_TIMEOUT
+      默认180 (秒)
+    8.splash
+      SPLASH_URL = ''
+      DUPEFILTER_CLASS = 'scrapy_splash.SplashAwareDupeFilter'
+      HTTPCACHE_STORAGE = 'scrapy_splash.SplashAwareFSCacheStorage'
+      DOWNLOADER_MIDDLEWARES = {
+      'scrapy_splash.SplashCookiesMiddleware': 723,
+      'scrapy_splash.SplashMiddleware': 725,
+      'scrapy.downloadermiddlewares.httpcompression.HttpCompressionMiddleware': 810
+      }
+      SPIDER_MIDDLEWARES = {
+      'scrapy_splash.SplashDeduplicateArgsMiddleware': 100,
+      }
+      在spider.py的start_request中
+        from scrapy_splash import SplashRequest
+        yield SplashRequest(url, callback=self.parse, endpoint='execute',
+                            args={'lua_source': script, 'page': page, 'wait': 7})
+        script = """
+        function main(splash, args)
+          splash.images_enabled = false
+          assert(splash:go(args.url))
+          assert(splash:wait(args.wait))
+          js = string.format("document.querySelector('#mainsrp-pager div.form > input').value=%d;
+                document.querySelector('#mainsrp-pager div.form > span.btn.J_Submit').click()", args.page)
+          splash:evaljs(js)
+          assert(splash:wait(args.wait))
+          return splash:html()
+        end
+        """
+lua
+
+
+      
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
